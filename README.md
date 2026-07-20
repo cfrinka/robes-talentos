@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Robes Britto
 
-## Getting Started
+Next.js 16 (App Router, TypeScript) rebuild of the Robes Britto talent agency site — public marketing pages plus a native admin panel, both backed by Firestore/Firebase Storage. Ported from the original Astro app; see `NEXTJS_MIGRATION.md` for the original migration spec this was built against.
 
-First, run the development server:
+## Stack
+
+- **Next.js 16**, App Router, TypeScript, plain CSS (`app/globals.css`, ported verbatim from the Astro site).
+- **Firebase**: `firebase-admin` for all server-side Firestore/Storage access; the client `firebase` SDK is used only by the admin login page and the dashboard's Publish button.
+- Two route groups under `app/`: `(site)` (the public marketing site, its own root layout) and `admin` (the admin panel, its own root layout + `admin.css`).
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Copy `.env.example` to `.env.local` and fill in your Firebase project's service account + web config (see comments in that file for where to find each value).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Open [http://localhost:3000](http://localhost:3000) for the public site, or `/admin/login` for the admin panel (single allowed admin email, set via `ADMIN_EMAIL`).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Architecture
 
-## Learn More
+- `lib/content/repository.ts` — cached, public reads (`unstable_cache`, tagged by entity) used by the marketing site.
+- `lib/content/admin-repository.ts` — live, uncached Firestore CRUD used by the admin panel, so edits show up immediately without waiting on cache invalidation.
+- `lib/actions/*.ts` — Server Actions for every admin mutation, each re-checking the session server-side via `lib/auth.ts`'s `requireAdmin()`.
+- `proxy.ts` — guards `/admin/**` (except `/admin/login`) by verifying the session cookie set by `app/api/auth/session/route.ts`.
+- Admin edits save to Firestore immediately, but the public site keeps serving cached content until the dashboard's "Publicar" button calls `app/api/publish/route.ts`, which revalidates every content tag.
 
-To learn more about Next.js, take a look at the following resources:
+## Deployment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`Dockerfile` builds a single Next.js standalone image (`output: 'standalone'` in `next.config.ts`); `docker-compose.yml` runs it as one service on port 3000. No separate publish/build service is needed — Publish is just a Route Handler call.
